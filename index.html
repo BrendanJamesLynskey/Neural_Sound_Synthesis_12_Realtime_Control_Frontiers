@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neural Sound Synthesis · Part 12 — Real-Time, Control &amp; Frontiers</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});"></script>
+<style>
+:root {
+  --bg: #0a0b0f;
+  --bg2: #12141c;
+  --bg3: #1a1d2a;
+  --fg: #d4d6e0;
+  --fg-dim: #8a8d9a;
+  --accent: #56d0d0;
+  --accent2: #8b7bf0;
+  --accent3: #5ce89a;
+  --accent4: #e85a7a;
+  --accent5: #e8a44a;
+  --border: #2a2d3a;
+  --glow: rgba(74,199,232,0.15);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body{background:var(--bg);color:var(--fg);font-family:'Palatino Linotype','Book Antiqua',Palatino,'Georgia',serif;line-height:1.75;overflow-x:hidden}
+::selection{background:var(--accent);color:var(--bg)}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .2s}
+a:hover{border-bottom-color:var(--accent)}
+
+header{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem;position:relative;overflow:hidden}
+header canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;opacity:.5}
+header .content{position:relative;z-index:1;max-width:880px}
+header .eyebrow{font-family:'Lucida Console',Monaco,monospace;font-size:.8rem;letter-spacing:.3em;text-transform:uppercase;color:var(--accent2);margin-bottom:1.4em}
+header h1{font-size:clamp(2rem,5vw,3.4rem);font-weight:300;letter-spacing:.04em;color:var(--accent);text-shadow:0 0 60px rgba(74,199,232,.3);margin-bottom:.3em}
+header h1 em{font-style:italic;color:var(--fg);font-weight:400}
+header .subtitle{font-size:1.12rem;color:var(--fg-dim);max-width:680px;margin:0 auto 2em}
+header .people{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;margin-bottom:2em}
+header .people span{font-size:.85rem;color:var(--fg);padding:.35em .9em;border:1px solid var(--border);border-radius:2px;background:rgba(26,29,42,.7)}
+header .cta{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap}
+
+nav#toc{position:sticky;top:0;z-index:100;background:rgba(10,11,15,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:.6rem 1rem;overflow-x:auto;white-space:nowrap;text-align:center}
+nav#toc a{display:inline-block;font-size:.78rem;color:var(--fg-dim);padding:.3em .7em;margin:0 .1em;letter-spacing:.04em;text-transform:uppercase;font-family:'Lucida Console',Monaco,monospace;transition:color .2s;border-bottom:none}
+nav#toc a:hover,nav#toc a.active{color:var(--accent)}
+
+section{max-width:920px;margin:0 auto;padding:4rem 1.5rem;border-bottom:1px solid var(--border)}
+section:last-of-type{border-bottom:none}
+h2{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:300;color:var(--accent);margin-bottom:.3em;letter-spacing:.03em}
+h2 .num{font-family:'Lucida Console',Monaco,monospace;font-size:.7em;color:var(--fg-dim);margin-right:.5em}
+h3{font-size:1.2rem;color:var(--accent2);margin:2em 0 .5em;font-weight:400}
+h4{font-size:1rem;color:var(--accent3);margin:1.5em 0 .3em;font-weight:400}
+p{margin-bottom:1.2em}
+ul,ol{padding-left:1.4em;margin-bottom:1.2em}
+li{margin-bottom:.5em}
+.lead{font-size:1.08rem;color:var(--fg);margin-bottom:1.5em}
+
+.viz{margin:2em 0;background:var(--bg2);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.viz canvas{display:block;width:100%;cursor:crosshair}
+.viz-caption{font-size:.8rem;color:var(--fg-dim);padding:.6em 1em;border-top:1px solid var(--border);font-family:'Lucida Console',Monaco,monospace}
+
+.controls{display:flex;flex-wrap:wrap;gap:.8rem;padding:.8em 1em;background:var(--bg3);border-top:1px solid var(--border);align-items:center}
+.controls label{font-size:.78rem;color:var(--fg-dim);font-family:'Lucida Console',Monaco,monospace;display:flex;align-items:center;gap:.4em}
+.controls input[type="range"]{width:120px;accent-color:var(--accent)}
+.controls select{background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:.3em .5em;font-size:.78rem;border-radius:2px;font-family:inherit}
+.controls button,.btn{background:var(--accent);color:var(--bg);border:none;padding:.45em 1em;font-size:.78rem;font-family:'Lucida Console',Monaco,monospace;cursor:pointer;border-radius:2px;letter-spacing:.03em;transition:background .2s}
+.controls button:hover,.btn:hover{background:#6fd4ef}
+.btn-outline{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+.btn-outline:hover{background:var(--accent);color:var(--bg)}
+.controls .val{color:var(--accent);font-family:'Lucida Console',monospace;font-size:.78rem;min-width:2.5em;display:inline-block}
+.tabrow{display:flex;gap:.3em;flex-wrap:wrap}
+.tabrow button{background:var(--bg);border:1px solid var(--border);color:var(--fg-dim)}
+.tabrow button.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+
+.math{display:block;text-align:center;padding:1.4em 1.2em;margin:1.5em 0;background:var(--bg2);border-left:3px solid var(--accent);font-size:1.1rem;color:var(--fg);overflow-x:auto;border-radius:0 4px 4px 0}
+.math .katex{font-size:1.2em}
+.math-inline .katex{font-size:1.0em}
+
+.timeline{position:relative;padding:1em 0 1em 2em;margin:2em 0}
+.timeline::before{content:'';position:absolute;left:.6em;top:0;bottom:0;width:2px;background:var(--border)}
+.timeline-item{position:relative;margin-bottom:1.8em;padding-left:1.5em}
+.timeline-item::before{content:'';position:absolute;left:-1.95em;top:.4em;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+.timeline-year{font-family:'Lucida Console',Monaco,monospace;color:var(--accent);font-size:.85rem;margin-bottom:.2em}
+.timeline-text{font-size:.95rem;color:var(--fg-dim)}
+.timeline-text strong{color:var(--fg)}
+
+blockquote{border-left:3px solid var(--accent5);padding:.8em 1.2em;margin:1.5em 0;color:var(--fg-dim);font-style:italic;background:rgba(232,164,74,.05)}
+blockquote cite{display:block;font-size:.85rem;color:var(--accent5);margin-top:.5em;font-style:normal}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5em;margin:1.5em 0}
+@media(max-width:700px){.grid-2{grid-template-columns:1fr}}
+
+.references{margin-top:2em;padding:1.5em;background:var(--bg2);border:1px solid var(--border);border-radius:4px}
+.references h3{margin-top:0}
+.references ol{padding-left:1.5em}
+.references li{font-size:.85rem;color:var(--fg-dim);margin-bottom:.5em;line-height:1.5}
+.references li em{color:var(--fg)}
+
+footer{text-align:center;padding:3em 1.5em;color:var(--fg-dim);font-size:.85rem;border-top:1px solid var(--border)}
+footer a{color:var(--accent2)}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--fg-dim)}
+
+.expandable{margin:1.5em 0;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.expandable summary{padding:.8em 1.2em;background:var(--bg3);cursor:pointer;font-size:.9rem;color:var(--accent2);font-family:'Lucida Console',Monaco,monospace;letter-spacing:.03em;list-style:none;display:flex;align-items:center;gap:.5em}
+.expandable summary::before{content:'>';font-size:.7em;transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+.expandable summary:hover{color:var(--fg)}
+.expandable .inner{padding:1.2em 1.4em;background:rgba(139,123,240,.04)}
+.expandable .inner p:last-child{margin-bottom:0}
+
+.note{font-size:.9rem;color:var(--fg-dim);margin:1em 0;padding:.6em 1em;border-left:2px solid var(--accent3);background:rgba(92,232,154,.05)}
+.warn{font-size:.9rem;color:var(--fg-dim);margin:1em 0;padding:.6em 1em;border-left:2px solid var(--accent4);background:rgba(232,90,122,.05)}
+.note strong,.warn strong{color:var(--fg)}
+
+table{width:100%;border-collapse:collapse;margin:1.5em 0;font-size:.9rem}
+th,td{padding:.5em .8em;border:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--bg3);color:var(--accent2);font-weight:400;font-family:'Lucida Console',Monaco,monospace;font-size:.76rem;letter-spacing:.03em}
+td{color:var(--fg-dim)}
+td code,p code,li code{font-family:'Lucida Console',Monaco,monospace;font-size:.85em;color:var(--accent3);background:rgba(92,232,154,.07);padding:.05em .3em;border-radius:2px}
+
+.xref{display:flex;flex-wrap:wrap;gap:.6em;margin:1.5em 0}
+.xref a{font-size:.8rem;padding:.5em 1em;border:1px solid var(--border);background:var(--bg3);font-family:'Lucida Console',Monaco,monospace;color:var(--fg-dim);border-bottom:none;border-radius:3px;transition:all .2s}
+.xref a:hover{color:var(--accent);border-color:var(--accent)}
+.xref a .k{display:block;font-size:.62rem;letter-spacing:.12em;color:var(--accent);margin-bottom:.2em}
+
+.pill{display:inline-block;font-family:'Lucida Console',monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;padding:.15em .55em;border-radius:2px;border:1px solid var(--border);color:var(--fg-dim);margin-left:.4em;vertical-align:middle}
+</style>
+</head>
+<body>
+
+<header>
+  <canvas id="heroCanvas"></canvas>
+  <div class="content">
+    <div class="eyebrow">Neural Sound Synthesis &middot; Part 12 of 12</div>
+    <h1>Real-Time, Control &amp; the <em>Frontier</em></h1>
+    <p class="subtitle">
+      Eleven parts built the machinery — waveforms, vocoders, codecs, diffusion. This last
+      one asks the questions that decide whether any of it reaches a stage or a phone:
+      can it run <em>now</em>, under your fingers; can you steer it; how do we know it is
+      good; and who is accountable for what it makes. Then we fold the whole series back
+      onto the single map we started with. Three live demos — a streaming latent knob, an
+      interactive Fréchet distance, and a navigable map of the field.
+    </p>
+    <div class="people">
+      <span>RAVE &middot; nn~ &middot; streaming</span>
+      <span>FAD &middot; CLAP &middot; MUSHRA &middot; KAD</span>
+      <span>AudioSeal &middot; C2PA</span>
+      <span>Distillation &middot; Consistency</span>
+    </div>
+    <div class="cta">
+      <a href="#realtime" class="btn">Begin &#8595;</a>
+      <a href="https://brendanjameslynskey.github.io/Neural_Sound_Synthesis/" class="btn btn-outline" target="_blank" rel="noopener">Series hub</a>
+    </div>
+  </div>
+</header>
+
+<nav id="toc">
+  <a href="#realtime">1 &middot; Real-Time</a>
+  <a href="#control">2 &middot; Control</a>
+  <a href="#eval">3 &middot; Evaluation</a>
+  <a href="#safety">4 &middot; Safety</a>
+  <a href="#efficiency">5 &middot; On-Device</a>
+  <a href="#synthesis">6 &middot; The Map, Closed</a>
+  <a href="#frontier">7 &middot; Frontier</a>
+</nav>
+
+<!-- ============================================================ -->
+<section id="realtime">
+  <h2><span class="num">1</span>Real-time &amp; streaming — the RAVE turn</h2>
+  <p class="lead">
+    Almost every model in this series generates <em>offline</em>: a WaveNet grinds out
+    16,000 samples one at a time (Part 2), a diffusion model runs dozens of denoising
+    passes over a whole clip (Part 8, Part 11). You wait, then you listen. A musician on a
+    stage cannot wait. The frontier question is whether a neural synthesiser can behave
+    like an <em>instrument</em> — responding to a control gesture within a few milliseconds,
+    continuously, on ordinary hardware.
+  </p>
+  <p>
+    <strong>RAVE</strong> (Caillon &amp; Esling, 2021) is the system that made this
+    practical. It is a variational autoencoder (Part 1's fifth family) whose encoder maps
+    audio into a very low-dimensional continuous latent, and whose decoder turns a latent
+    trajectory back into a 44.1&nbsp;kHz waveform — fast enough to run <em>faster than
+    real time on a laptop CPU</em>. Because the latent is only a handful of dimensions per
+    frame, you can expose those dimensions as knobs and <em>play</em> the timbre.
+  </p>
+
+  <h3>Try it — a latent you can hear move</h3>
+  <p>
+    The demo below is a live, continuously-running synthesis graph, in the RAVE spirit:
+    a small latent vector <span class="math-inline">$\mathbf{z}=(z_1,z_2,z_3)$</span> drives
+    the harmonic spectrum of the sound <em>in real time</em>. Press <strong>Start</strong>,
+    then sweep the sliders — brightness, harmonicity and register change the timbre the
+    instant you move them, with no re-render and no offline pass. That immediacy is the
+    whole point: contrast it with the "generate, wait, listen" loop of every earlier part.
+  </p>
+
+  <div class="viz">
+    <canvas id="raveViz" height="240" aria-label="a live spectrum driven by a three-dimensional latent vector"></canvas>
+    <div class="controls">
+      <button id="raveToggle">▶ Start</button>
+      <label>z₁ brightness <input type="range" id="raveZ1" min="0" max="1" step="0.01" value="0.6"><span class="val" id="raveZ1V">0.60</span></label>
+      <label>z₂ harmonicity <input type="range" id="raveZ2" min="0" max="1" step="0.01" value="0.5"><span class="val" id="raveZ2V">0.50</span></label>
+      <label>z₃ register <input type="range" id="raveZ3" min="0" max="1" step="0.01" value="0.4"><span class="val" id="raveZ3V">0.40</span></label>
+    </div>
+    <div class="viz-caption" id="raveCap">Press Start, then move the three latent knobs. The bars are the live harmonic spectrum; the sound updates continuously.</div>
+  </div>
+  <p class="note">
+    <strong>What you are hearing.</strong> This is a hand-built additive stand-in, not a
+    trained decoder — but the interaction model is exactly RAVE's: a tiny latent, mapped
+    continuously to timbre, driving an always-on audio graph. A real RAVE decoder replaces
+    the harmonic bank with a learned convolutional network, so the same three knobs would
+    glide between the timbres of whatever corpus it was trained on (voices, strings,
+    ambience) rather than a fixed harmonic series.
+  </p>
+
+  <h3>How RAVE earns its speed</h3>
+  <p>
+    Two ideas do the work. First, a <strong>two-stage training</strong> recipe. Stage one
+    trains the VAE with a plain reconstruction + KL objective to learn a compact,
+    well-behaved latent — stable but slightly dull. Stage two <em>freezes the encoder</em>
+    and fine-tunes only the decoder adversarially, with a discriminator (Part 3, Part 7)
+    pushing the output toward realism. You get the VAE's smooth, controllable latent
+    <em>and</em> the GAN's crisp high frequencies, without the training instability of
+    doing both at once.
+  </p>
+  <p>
+    Second, <strong>causal, cached convolutions</strong>. A streaming model may only look
+    backwards: the output at frame <span class="math-inline">$t$</span> can depend on inputs
+    up to <span class="math-inline">$t$</span> but never after. That is the same causal
+    constraint WaveNet obeyed (Part 1, Part 2), but here it is exploited for latency: each
+    layer <em>caches</em> the tail of its previous input so a new block of samples costs
+    only the incremental convolution, not a recomputation of the whole receptive field.
+  </p>
+  <div class="math">
+    $$\hat{y}_t = f\big(x_{t-r+1},\,\dots,\,x_t\big),\qquad
+      \text{latency} \;\approx\; \underbrace{\tfrac{L_{\text{block}}}{f_s}}_{\text{block}} \;+\; \underbrace{\tfrac{r-1}{f_s}}_{\text{receptive tail}}$$
+  </div>
+  <p>
+    With a causal receptive field <span class="math-inline">$r$</span> and block length
+    <span class="math-inline">$L_{\text{block}}$</span>, the algorithmic latency is just the
+    block plus the causal tail — a few milliseconds, not the length of the clip. This is
+    what lets RAVE ship as <strong>nn~</strong>, an external for Max/MSP and Pure&nbsp;Data:
+    a trained model drops into a patch as a single object, and a performer bends its latent
+    with a MIDI controller live.
+  </p>
+
+  <details class="expandable"><summary>the constraint in one line · why non-causal padding leaks the future</summary>
+    <div class="inner">
+      <p>A symmetric ("same") convolution centred on sample <span class="math-inline">$t$</span>
+      reads <span class="math-inline">$x_{t+1},\dots,x_{t+(k-1)/2}$</span> — samples that,
+      in a live stream, <em>have not happened yet</em>. Training that way and then deploying
+      streaming produces a model that hallucinates or clicks at every block boundary.
+      Causal convolution shifts the kernel so it reads only
+      <span class="math-inline">$x_{t-(k-1)},\dots,x_t$</span>; the cost is that the
+      receptive field extends only backwards, so the same reach
+      <span class="math-inline">$r=1+(k-1)\sum_\ell d_\ell$</span> now costs pure latency
+      you must budget for. Every real-time neural synthesiser lives inside this trade
+      between reach and delay.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================ -->
+<section id="control">
+  <h2><span class="num">2</span>Controllability — from black box to instrument</h2>
+  <p class="lead">
+    A model that sounds perfect but only ever produces one thing is a recording, not a
+    synthesiser. The value of these systems is in the <em>handles</em> they give you — and
+    the series has quietly been a tour of ever-better handles. This section names the
+    families of control and where each one lives.
+  </p>
+
+  <h3>Four ways to steer a generator</h3>
+  <table>
+    <thead><tr><th>Control surface</th><th>What you turn</th><th>Where in the series</th></tr></thead>
+    <tbody>
+      <tr><td><strong style="color:var(--accent)">Interpretable / physical</strong></td>
+        <td>Parameters that mean something: pitch, loudness, harmonic distribution, filter cutoff. DDSP exposes an oscillator's own controls, so a gradient can tune a synth you already understand.</td>
+        <td>DDSP <span class="pill">Part 6</span></td></tr>
+      <tr><td><strong style="color:var(--accent3)">Latent / attribute</strong></td>
+        <td>Continuous learned dimensions (RAVE's <span class="math-inline">$\mathbf{z}$</span>), or explicit conditioning tags — speaker, instrument, style — concatenated to the model's input.</td>
+        <td>RAVE, GANSynth <span class="pill">Part 7 · 12</span></td></tr>
+      <tr><td><strong style="color:var(--accent5)">Symbolic / score</strong></td>
+        <td>Notes, phonemes, F0 contours: the generator renders a structured plan you wrote. TTS and singing models are conditioned this way.</td>
+        <td>TTS, singing <span class="pill">Part 4 · 5</span></td></tr>
+      <tr><td><strong style="color:var(--accent2)">Text / prompt</strong></td>
+        <td>Natural-language description, embedded by a joint audio–text model and used as a diffusion or LM condition. Flexible, but coarse and hard to make repeatable.</td>
+        <td>Text-to-audio <span class="pill">Part 10 · 11</span></td></tr>
+    </tbody>
+  </table>
+  <p>
+    Read down that list and you are reading a tension. The top is <em>precise and
+    real-time</em> but narrow; the bottom is <em>expressive and general</em> but sloppy and
+    slow. DDSP's cutoff knob does exactly one thing every time; a text prompt does roughly
+    the right thing, differently on each seed. The open problem of controllability is to get
+    prompt-level generality with knob-level precision and repeatability — ideally at the
+    real-time latency of Section&nbsp;1.
+  </p>
+  <blockquote>
+    The best performance interfaces disentangle. If moving one control changes one perceptual
+    thing — brightness without pitch, effort without vowel — the model is playable. If every
+    knob smears across everything, it is a slot machine with faders.
+  </blockquote>
+  <p class="note">
+    <strong>Disentanglement is not free.</strong> RAVE's latent dimensions are ordered by
+    explained variance, so the first few are the most audibly meaningful — but they are not
+    guaranteed to be perceptually independent. Achieving clean, labelled, orthogonal
+    controls (this axis <em>is</em> brightness, that one <em>is</em> attack) remains an
+    active research target rather than a solved feature.
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<section id="eval">
+  <h2><span class="num">3</span>Evaluation, revisited — measuring a distribution</h2>
+  <p class="lead">
+    Part 1 introduced the metrics ladder and promised this part would dissect it. Here is
+    the debt paid. The central idea is one Part 1 stated and we now make concrete: for
+    generative audio you cannot score sample-against-target, because there <em>is</em> no
+    single correct output. You must compare the <em>distribution</em> of what the model
+    makes against the distribution of real audio.
+  </p>
+
+  <h3>Fréchet Audio Distance, in full</h3>
+  <p>
+    FAD (Kilgour et&nbsp;al., 2019) embeds a set of real and a set of generated clips with a
+    pretrained audio network, fits a Gaussian to each cloud of embeddings, and reports the
+    <strong>2-Wasserstein (Fréchet) distance</strong> between those two Gaussians:
+  </p>
+  <div class="math">
+    $$\mathrm{FAD} = \lVert \mu_r - \mu_g \rVert_2^{2}
+      + \operatorname{tr}\!\Big(\Sigma_r + \Sigma_g - 2\big(\Sigma_r \Sigma_g\big)^{1/2}\Big)$$
+  </div>
+  <p>
+    The first term punishes a mismatch in the <em>average</em> embedding; the second punishes
+    a mismatch in the <em>spread and correlation</em>. Crucially it is zero only when the two
+    Gaussians coincide — so a model is rewarded for covering the real corpus's whole range,
+    not for nailing any one target. That is exactly why it succeeds where a per-sample loss
+    (which would demand the model reproduce a specific waveform) is meaningless for
+    generation.
+  </p>
+
+  <h3>Feel the two terms move</h3>
+  <p>
+    Below are two clouds of embeddings in a toy 2-D space: <span style="color:var(--accent)">real</span>
+    (fixed) and <span style="color:var(--accent4)">generated</span> (yours). Drag the
+    generated cloud's mean and reshape its covariance, and watch FAD — and its
+    mean-term / covariance-term split — update live. Press <strong>Match real</strong> to
+    slide the generated distribution onto the real one and see the distance collapse toward
+    zero.
+  </p>
+
+  <div class="viz">
+    <canvas id="fadViz" height="330" aria-label="two Gaussian point clouds and their Frechet distance"></canvas>
+    <div class="controls">
+      <label>μ_g&nbsp;x <input type="range" id="fadMx" min="-3" max="3" step="0.05" value="1.7"><span class="val" id="fadMxV">1.70</span></label>
+      <label>μ_g&nbsp;y <input type="range" id="fadMy" min="-3" max="3" step="0.05" value="-1.3"><span class="val" id="fadMyV">-1.30</span></label>
+      <label>spread <input type="range" id="fadS" min="0.4" max="2.6" step="0.02" value="2.4"><span class="val" id="fadSV">2.40</span></label>
+      <label>shape° <input type="range" id="fadR" min="0" max="180" step="1" value="115"><span class="val" id="fadRV">115</span></label>
+      <button id="fadMatch" class="btn-outline">↦ Match real</button>
+    </div>
+    <div class="viz-caption" id="fadCap">FAD = ‖μ_r−μ_g‖² + tr(Σ_r+Σ_g−2(Σ_rΣ_g)^½). Move the generated cloud onto the real one to drive it toward 0.</div>
+  </div>
+  <details class="expandable"><summary>the matrix square-root, closed-form for 2×2</summary>
+    <div class="inner">
+      <p>The intimidating term is <span class="math-inline">$\operatorname{tr}\big((\Sigma_r\Sigma_g)^{1/2}\big)$</span>.
+      For symmetric positive-definite <span class="math-inline">$\Sigma_r,\Sigma_g$</span> the
+      product <span class="math-inline">$\Sigma_r\Sigma_g$</span> has real non-negative
+      eigenvalues <span class="math-inline">$\lambda_1,\lambda_2$</span>, and
+      <span class="math-inline">$\operatorname{tr}\big((\Sigma_r\Sigma_g)^{1/2}\big)=\sqrt{\lambda_1}+\sqrt{\lambda_2}$</span>.
+      Using <span class="math-inline">$(\sqrt{\lambda_1}+\sqrt{\lambda_2})^2=\lambda_1+\lambda_2+2\sqrt{\lambda_1\lambda_2}$</span>
+      with <span class="math-inline">$\lambda_1+\lambda_2=\operatorname{tr}(\Sigma_r\Sigma_g)$</span>
+      and <span class="math-inline">$\lambda_1\lambda_2=\det\Sigma_r\det\Sigma_g$</span>,</p>
+      <div class="math">$$\operatorname{tr}\big((\Sigma_r\Sigma_g)^{1/2}\big)=\sqrt{\operatorname{tr}(\Sigma_r\Sigma_g)+2\sqrt{\det\Sigma_r\,\det\Sigma_g}}\,.$$</div>
+      <p>That is precisely the formula the demo evaluates each frame from the empirical
+      covariances of the two clouds — no eigensolver required.</p>
+    </div>
+  </details>
+
+  <h3>The rest of the ladder — and why it wobbles</h3>
+  <div class="grid-2">
+    <div>
+      <h4>CLAP score</h4>
+      <p>For text-conditioned audio, embed the output and the prompt with a joint
+      <strong>CLAP</strong> model and take their cosine similarity — a proxy for "does this
+      sound match those words?".</p>
+      <div class="math">$$\text{CLAP} = \frac{\mathbf{e}_{\text{audio}}\cdot \mathbf{e}_{\text{text}}}{\lVert\mathbf{e}_{\text{audio}}\rVert\,\lVert\mathbf{e}_{\text{text}}\rVert}$$</div>
+    </div>
+    <div>
+      <h4>Human tests — still the ceiling</h4>
+      <p><strong>MOS</strong> (mean opinion score, 1–5) and <strong>MUSHRA</strong> (hidden
+      reference + anchor, 0–100) remain the only measures that directly ask "does this sound
+      real / good?". Expensive, slow, and irreplaceable.</p>
+    </div>
+  </div>
+  <div class="warn">
+    <strong>Every objective metric is gameable — and FAD especially so.</strong> Its score
+    depends heavily on the embedding network and the reference set; a model can lower FAD by
+    matching corpus <em>statistics</em> while still producing artefacts, and small evaluation
+    sets give unstable, biased estimates. Newer kernel-based distances — <strong>KAD</strong>,
+    built on the Maximum Mean Discrepancy — drop the Gaussian assumption and are unbiased for
+    small samples, but they too are proxies. The honest paper still runs a listening test.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="safety">
+  <h2><span class="num">4</span>Safety, provenance &amp; ethics — who made this sound?</h2>
+  <p class="lead">
+    A model that can clone a voice from seconds of audio, or generate a song in a named
+    artist's style, is a capability and a hazard in the same weights. This is not an
+    appendix to the engineering — it increasingly <em>is</em> the deployment question.
+  </p>
+
+  <h3>The hazards, plainly</h3>
+  <ul>
+    <li><strong>Voice cloning &amp; consent.</strong> Zero-shot speaker cloning enables
+    accessibility and localisation — and impersonation, fraud, and non-consensual synthetic
+    speech. Consent of the voice owner is the ethical fault line.</li>
+    <li><strong>Deepfakes.</strong> Synthetic audio of real people saying things they never
+    said, at a quality that defeats casual listeners.</li>
+    <li><strong>Copyright &amp; datasets.</strong> Training corpora scraped from
+    copyrighted recordings raise unresolved questions of consent, licensing, and
+    style-appropriation that the law is still catching up to.</li>
+  </ul>
+
+  <h3>Two technical responses: watermarking and provenance</h3>
+  <p>
+    <strong>Audio watermarking</strong> embeds an imperceptible, robust signal into
+    generated audio that a detector can later read — ideally surviving compression,
+    resampling, and re-recording. <strong>AudioSeal</strong> (San Roman et&nbsp;al., 2024)
+    is the state of the art: it trains a generator/detector pair jointly and, unusually,
+    detects the mark <em>sample-by-sample</em>, so it can flag which segments of a longer
+    clip are synthetic — proactive detection built into the model, not bolted on after.
+  </p>
+  <p>
+    <strong>Provenance</strong> attacks the problem from the metadata side.
+    <strong>C2PA</strong> (the Coalition for Content Provenance and Authenticity) defines a
+    cryptographically-signed manifest — "content credentials" — that travels with a file
+    and records how it was made and edited. Watermarking survives the metadata being
+    stripped; C2PA carries rich, verifiable history while it is intact. They are
+    complementary, not rivals.
+  </p>
+  <div class="grid-2">
+    <div class="note"><strong>Watermark.</strong> In the signal itself; robust to
+    re-encoding; low bandwidth (a flag, maybe an ID). Answers "is this synthetic?" even
+    after the file has been mangled.</div>
+    <div class="warn"><strong>Provenance (C2PA).</strong> In signed metadata; rich and
+    human-readable; brittle — a screenshot or a re-upload can strip it. Answers "where did
+    this come from?" while the manifest survives.</div>
+  </div>
+  <p>
+    Neither is a solution alone, and both are subject to an adversary. But the direction is
+    clear: attribution is becoming a first-class design requirement for generative audio,
+    alongside quality and speed.
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<section id="efficiency">
+  <h2><span class="num">5</span>On-device &amp; efficiency — shrinking the giant</h2>
+  <p class="lead">
+    The models that top the FAD leaderboards are large and slow. Getting them onto a phone,
+    a pedal, or a browser tab — running with low latency and no cloud round-trip — is its
+    own research frontier, and it leans on three levers.
+  </p>
+  <div class="grid-2">
+    <div>
+      <h4>Fewer steps — consistency models</h4>
+      <p>Diffusion's cost is its dozens of denoising steps (Part 8, Part 11).
+      <strong>Consistency models</strong> (Song et&nbsp;al., 2023) train a network so that
+      any point on a noising trajectory maps <em>directly</em> to the clean sample — enabling
+      one- or few-step generation. Applied to audio, they collapse a 50-step sampler toward
+      a single pass.</p>
+    </div>
+    <div>
+      <h4>Smaller weights — distillation &amp; quantization</h4>
+      <p><strong>Distillation</strong> trains a compact student to mimic a large teacher.
+      <strong>Quantization</strong> stores and computes in 8-bit (or lower) instead of
+      32-bit floats, shrinking memory and speeding inference — the same μ-law intuition from
+      Part 1, now applied to the <em>weights</em> rather than the signal.</p>
+    </div>
+  </div>
+  <p>
+    RAVE's whole design (Section 1) is an existence proof that this can be done: a compact
+    VAE, a causal decoder, and enough engineering to beat real time on a CPU. The frontier
+    is to bring the <em>quality</em> of the big text-to-audio systems into that same budget.
+  </p>
+  <p class="note">
+    <strong>The efficiency triangle mirrors the family trilemma.</strong> Part 1 framed
+    quality vs. speed vs. coverage; on-device work is the same trade under a hard compute
+    ceiling. A consistency-distilled, quantized model buys speed and size — and the open
+    question is always how much quality and diversity it quietly spends to get there.
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<section id="synthesis">
+  <h2><span class="num">6</span>The whole series, on one map</h2>
+  <p class="lead">
+    Part 1 drew a map: four <em>domains</em> a model can work in, five <em>families</em> that
+    place a distribution over them. Every part since was a point on that map. Here is the
+    map again, filled in — and the honest reading is that modern systems no longer sit on a
+    single point. They <em>compose</em> families across domains.
+  </p>
+
+  <h3>Where each part sat</h3>
+  <table>
+    <thead><tr><th>Part</th><th>Domain</th><th>Dominant family</th><th>Modern combination it points to</th></tr></thead>
+    <tbody>
+      <tr><td><strong>2</strong> AR waveform</td><td>Raw waveform</td><td>Autoregressive</td><td>The fidelity ceiling; now a teacher for faster students.</td></tr>
+      <tr><td><strong>3</strong> Neural vocoders</td><td>Spectrogram → wave</td><td>GAN</td><td>The real-time inverse of the STFT; the last mile of most pipelines.</td></tr>
+      <tr><td><strong>4</strong> End-to-end TTS</td><td>Spectrogram</td><td>AR / flow / VAE</td><td>Text → mel → wave, then fused (VITS = flow + VAE + GAN).</td></tr>
+      <tr><td><strong>5</strong> Singing voice</td><td>Spectrogram</td><td>Diffusion</td><td>Score + F0 control meets diffusion refinement.</td></tr>
+      <tr><td><strong>6</strong> Differentiable DSP</td><td>Interpretable params</td><td>Autoencoder</td><td>Neural control of a classical synth — the cleanest handles in the series.</td></tr>
+      <tr><td><strong>7</strong> GAN instruments</td><td>Spectrogram / latent</td><td>GAN</td><td>Adversarial timbre; attribute-conditioned generation.</td></tr>
+      <tr><td><strong>8</strong> Diffusion &amp; flow</td><td>Waveform / spectrogram</td><td>Diffusion / flow</td><td>The quality engine, now being distilled toward few-step.</td></tr>
+      <tr><td><strong>9</strong> Neural codecs</td><td>Discrete tokens</td><td>VAE + VQ + GAN</td><td>The tokeniser that made audio language models possible.</td></tr>
+      <tr><td><strong>10</strong> LM music generation</td><td>Discrete tokens</td><td>Autoregressive</td><td>A transformer over codec tokens — MusicGen, AudioLM.</td></tr>
+      <tr><td><strong>11</strong> Latent diffusion</td><td>Continuous latent</td><td>Diffusion + VAE</td><td>Text-to-audio in a compressed latent — Stable Audio, AudioLDM.</td></tr>
+      <tr><td><strong>12</strong> This part</td><td>Continuous latent</td><td>VAE + GAN, streaming</td><td>Real-time, controllable, accountable — RAVE and beyond.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Navigate the field</h3>
+  <p>
+    The map below places all twelve parts on a timeline, 2016 → now → frontier. Pick a
+    <em>lens</em> — one of the open problems that runs through the whole series — to see
+    which parts advanced it, and click any node for a summary and a link back to that part.
+  </p>
+
+  <div class="viz">
+    <canvas id="roadViz" height="300" aria-label="an interactive timeline of the twelve parts, filterable by open problem"></canvas>
+    <div class="controls">
+      <div class="tabrow" id="roadLens">
+        <button data-l="all" class="on">All</button>
+        <button data-l="realtime">Real-time</button>
+        <button data-l="control">Control</button>
+        <button data-l="longform">Long-form</button>
+        <button data-l="eval">Evaluation</button>
+        <button data-l="watermark">Watermarking</button>
+        <button data-l="ondevice">On-device</button>
+      </div>
+      <button id="roadPrev" class="btn-outline">◀</button>
+      <button id="roadNext" class="btn-outline">▶</button>
+    </div>
+    <div class="viz-caption" id="roadCap">Click a node, or step with the arrows. Choose a lens to highlight the parts that advanced that open problem.</div>
+  </div>
+  <div class="note" id="roadInfo">Select a node above to see its thread and a link to that part.</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="frontier">
+  <h2><span class="num">7</span>Open problems &amp; the road ahead</h2>
+  <p>
+    The neural era went from a network that could barely babble a vowel to text-prompted
+    music in under a decade. The remaining problems are not small refinements; they are the
+    axes the next decade will be argued along.
+  </p>
+  <div class="timeline">
+    <div class="timeline-item"><div class="timeline-year">Real-time, high fidelity</div><div class="timeline-text">Streaming, causal models that match offline quality on a CPU or an edge device. <strong>RAVE</strong> proved the shape of the answer; closing the quality gap to the big systems is open. <span class="pill">§1 · §5</span></div></div>
+    <div class="timeline-item"><div class="timeline-year">Controllability</div><div class="timeline-text">Prompt-level generality with knob-level precision, disentanglement, and repeatability — controls a performer can trust the same way twice. <span class="pill">§2 · Part 6</span></div></div>
+    <div class="timeline-item"><div class="timeline-year">Long-form structure</div><div class="timeline-text">Coherent minutes of music or speech with global form — verses, returns, argument — not just locally plausible texture. Still largely unsolved. <span class="pill">Part 10 · 11</span></div></div>
+    <div class="timeline-item"><div class="timeline-year">Evaluation</div><div class="timeline-text">Metrics that track human judgement, resist gaming, and stay stable on small sets. FAD, CLAP and KAD are proxies; the gap to MUSHRA is real. <span class="pill">§3 · Part 1</span></div></div>
+    <div class="timeline-item"><div class="timeline-year">Watermarking &amp; attribution</div><div class="timeline-text">Imperceptible, robust marks (<strong>AudioSeal</strong>) and verifiable provenance (<strong>C2PA</strong>) as default, not opt-in — so synthetic audio is accountable. <span class="pill">§4</span></div></div>
+    <div class="timeline-item"><div class="timeline-year">On-device &amp; efficiency</div><div class="timeline-text">Consistency models, distillation, quantization — the frontier of shrinking a leaderboard-topping model to a phone without spending its soul. <span class="pill">§5 · Part 8</span></div></div>
+  </div>
+
+  <blockquote>
+    The families are primitives; the art is in how you compose them. Twelve parts on, that
+    line from Part 1 is the whole thesis. There is no winning architecture — there is a
+    palette of domains and families, and a set of hard trade-offs, and the systems that
+    matter are the ones that combine them well enough to be fast, controllable, and honest
+    about what they are.
+  </blockquote>
+
+  <h2><span class="num">↺</span>Close the loop</h2>
+  <p>
+    You have the whole arc now: the map, every technique that fills it in, and the frontier
+    where they meet. The natural last move is to go back to the beginning and read the map
+    with everything you now know — the domains, the families, and the metrics will look
+    different on the second pass.
+  </p>
+  <div class="xref">
+    <a href="https://brendanjameslynskey.github.io/Neural_Sound_Synthesis/"><span class="k">Series hub</span>All twelve parts &middot; the interactive map</a>
+    <a href="https://brendanjameslynskey.github.io/Neural_Sound_Synthesis_11_Latent_Diffusion_Text_to_Audio/"><span class="k">Part 11 ←</span>Latent Diffusion &amp; Text-to-Audio</a>
+    <a href="https://brendanjameslynskey.github.io/Neural_Sound_Synthesis_01_Foundations_and_Landscape/"><span class="k">Part 1 ↺</span>Foundations &amp; the Landscape — revisit the map</a>
+    <a href="https://github.com/BrendanJamesLynskey/DSP_and_Music"><span class="k">Collection</span>DSP &amp; Music</a>
+  </div>
+  <div class="references">
+    <h3>References</h3>
+    <ol>
+      <li>Caillon, A. &amp; Esling, P. (2021). <em>RAVE: A variational autoencoder for fast and high-quality neural audio synthesis.</em> arXiv:2111.05011.</li>
+      <li>Kilgour, K. et&nbsp;al. (2019). <em>Fréchet Audio Distance: A Reference-Free Metric for Evaluating Music Enhancement Algorithms.</em> Interspeech.</li>
+      <li>Wu, Y. et&nbsp;al. (2023). <em>Large-Scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation (CLAP).</em> ICASSP.</li>
+      <li>San Roman, R. et&nbsp;al. (2024). <em>Proactive Detection of Voice Cloning with Localized Watermarking (AudioSeal).</em> ICML.</li>
+      <li>Song, Y. et&nbsp;al. (2023). <em>Consistency Models.</em> ICML.</li>
+      <li>Gretton, A. et&nbsp;al. (2012). <em>A Kernel Two-Sample Test (MMD).</em> JMLR — the basis for kernel audio distances (KAD).</li>
+      <li>Engel, J. et&nbsp;al. (2020). <em>DDSP: Differentiable Digital Signal Processing.</em> ICLR.</li>
+      <li>Coalition for Content Provenance and Authenticity (2023). <em>C2PA Technical Specification.</em> (Content Credentials.)</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <p>
+    Neural Sound Synthesis &middot; Part 12 — Real-Time, Control &amp; Frontiers<br>
+    Part of the <a href="https://github.com/BrendanJamesLynskey/DSP_and_Music" target="_blank" rel="noopener">DSP &amp; Music</a> collection &middot;
+    single-file HTML/CSS/JS &middot; Web Audio API &middot; KaTeX &middot; no dependencies.
+  </p>
+</footer>
+
+<script>
+(function(){
+"use strict";
+// ── utilities ─────────────────────────────────────────────────
+const DPR=window.devicePixelRatio||1;
+function setupCanvas(c,w,h){ c.width=Math.round(w*DPR); c.height=Math.round(h*DPR); c.style.height=h+'px'; const x=c.getContext('2d'); x.setTransform(DPR,0,0,DPR,0,0); return x; }
+function fitWidth(c){ const r=c.parentElement.getBoundingClientRect(); return Math.max(320,Math.floor(r.width)); }
+let audioCtx=null;
+function actx(){ if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); return audioCtx; }
+function play(samples,sr){ const a=actx(); const b=a.createBuffer(1,samples.length,sr); b.getChannelData(0).set(samples); const s=a.createBufferSource(); s.buffer=b; const g=a.createGain(); g.gain.value=0.9; s.connect(g); g.connect(a.destination); s.start(); return s; }
+function fade(buf,n){ const N=buf.length,k=Math.min(n,N>>1); for(let i=0;i<k;i++){ buf[i]*=i/k; buf[N-1-i]*=i/k; } return buf; }
+
+const TEAL=()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#56d0d0';
+
+// ── DEMO 1: streaming latent knob (RAVE-style) ────────────────
+(function raveKnob(){
+  const c=document.getElementById('raveViz'); if(!c) return;
+  const cap=document.getElementById('raveCap'); const H=240;
+  let W=fitWidth(c); let ctx=setupCanvas(c,W,H);
+  const NH=16;
+  const z1=document.getElementById('raveZ1'), z2=document.getElementById('raveZ2'), z3=document.getElementById('raveZ3');
+  const z1v=document.getElementById('raveZ1V'), z2v=document.getElementById('raveZ2V'), z3v=document.getElementById('raveZ3V');
+  const toggle=document.getElementById('raveToggle');
+  const z={b:0.6,h:0.5,p:0.4};
+  let playing=false, nodes=null, raf=null, ph=0;
+  function harmonicGains(){
+    const g=new Float32Array(NH);
+    const tilt=2.6-z.b*2.3;                       // bright → shallow tilt → more highs
+    for(let h=1;h<=NH;h++){
+      let a=Math.pow(h,-tilt);
+      if(h%2===0) a*=(1-0.92*z.h);                // even-harmonic notch → hollow/odd timbre
+      a*=1+0.35*Math.sin(h*(0.4+z.h*2.4));        // spectral ripple for character
+      g[h-1]=Math.max(0,a);
+    }
+    let s=0; for(let i=0;i<NH;i++) s+=g[i]; if(s>0) for(let i=0;i<NH;i++) g[i]/=s;
+    return g;
+  }
+  function f0(){ return 82.4*Math.pow(2, z.p*1.9); }   // ~E2 .. ~E4
+  function startAudio(){
+    const a=actx();
+    const master=a.createGain(); master.gain.value=0.0001; master.connect(a.destination);
+    const lp=a.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6000; lp.Q.value=0.7; lp.connect(master);
+    const base=f0(), g=harmonicGains(); const oscs=[], gains=[];
+    for(let h=1;h<=NH;h++){
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=base*h;
+      const gn=a.createGain(); gn.gain.value=g[h-1]*0.7;
+      o.connect(gn); gn.connect(lp); o.start();
+      oscs.push(o); gains.push(gn);
+    }
+    master.gain.setTargetAtTime(0.17, a.currentTime, 0.06);
+    nodes={a,master,lp,oscs,gains};
+    updateAudio();
+  }
+  function updateAudio(){
+    if(!nodes) return; const a=nodes.a, base=f0(), g=harmonicGains(), now=a.currentTime;
+    for(let h=1;h<=NH;h++){ nodes.oscs[h-1].frequency.setTargetAtTime(base*h, now, 0.02); nodes.gains[h-1].gain.setTargetAtTime(g[h-1]*0.7, now, 0.04); }
+    nodes.lp.frequency.setTargetAtTime(900+z.b*8500, now, 0.05);
+  }
+  function stopAudio(){
+    if(!nodes) return; const n=nodes; const now=n.a.currentTime; n.master.gain.setTargetAtTime(0.0001, now, 0.05);
+    setTimeout(()=>{ try{ n.oscs.forEach(o=>{ o.stop(); o.disconnect(); }); n.gains.forEach(x=>x.disconnect()); n.lp.disconnect(); n.master.disconnect(); }catch(e){} }, 160);
+    nodes=null;
+  }
+  function draw(){
+    ctx.fillStyle='#12141c'; ctx.fillRect(0,0,W,H);
+    const g=harmonicGains(), base=f0();
+    const padX=16, padT=20, plotW=W-padX-16, plotH=H-padT-64;
+    let mx=1e-9; for(let i=0;i<NH;i++) mx=Math.max(mx,g[i]);
+    const bw=plotW/NH, cutoff=900+z.b*8500;
+    for(let i=0;i<NH;i++){
+      const shimmer = playing?(1+0.05*Math.sin(ph*3+i)):1;
+      const hgt=(g[i]/mx)*plotH*shimmer; const x=padX+i*bw;
+      const audible = base*(i+1)<=cutoff;
+      const lig=(26+ (g[i]/mx)*40)|0;
+      ctx.fillStyle= audible?`hsl(180,58%,${lig}%)`:`hsl(180,20%,${Math.max(18,lig-14)}%)`;
+      ctx.fillRect(x+1, padT+plotH-hgt, Math.max(1,bw-2), hgt);
+    }
+    // baseline
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.moveTo(padX,padT+plotH+0.5); ctx.lineTo(padX+plotW,padT+plotH+0.5); ctx.stroke();
+    ctx.fillStyle='#8a8d9a'; ctx.font="10px 'Lucida Console',monospace"; ctx.textAlign='left';
+    ctx.fillText('LIVE HARMONIC SPECTRUM · f0 = '+base.toFixed(1)+' Hz · '+(playing?'▶ streaming':'idle'), padX, 13);
+    ctx.fillText('harmonic 1 → '+NH, padX, padT+plotH+14);
+    // latent readout bars
+    const ly=H-24, seg=plotW/3;
+    const labs=[['z1 bright',z.b],['z2 harm',z.h],['z3 reg',z.p]];
+    labs.forEach((L,i)=>{ const bx=padX+i*seg; const barW=seg-64;
+      ctx.fillStyle='#8a8d9a'; ctx.fillText(L[0], bx, ly-2);
+      ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.strokeRect(bx+52, ly-9, barW, 8);
+      ctx.fillStyle=TEAL(); ctx.fillRect(bx+52, ly-9, barW*L[1], 8);
+    });
+  }
+  function upd(){ z.b=+z1.value; z.h=+z2.value; z.p=+z3.value; z1v.textContent=z.b.toFixed(2); z2v.textContent=z.h.toFixed(2); z3v.textContent=z.p.toFixed(2); updateAudio(); }
+  [z1,z2,z3].forEach(el=>el.addEventListener('input',upd));
+  toggle.addEventListener('click',()=>{
+    playing=!playing;
+    if(playing){ toggle.textContent='◼ Stop'; startAudio(); cap.textContent='Streaming. Move z₁–z₃ and the timbre changes instantly — no re-render. That immediacy is the RAVE promise.'; }
+    else { toggle.textContent='▶ Start'; stopAudio(); cap.textContent='Stopped. Press Start, then sweep the latent knobs.'; }
+  });
+  window.addEventListener('resize',()=>{ W=fitWidth(c); ctx=setupCanvas(c,W,H); });
+  (function loop(){ ph+=0.05; draw(); raf=requestAnimationFrame(loop); })();
+})();
+
+// ── DEMO 2: FAD explainer (two Gaussian clouds) ───────────────
+(function fadExplainer(){
+  const c=document.getElementById('fadViz'); if(!c) return;
+  const cap=document.getElementById('fadCap'); const H=330;
+  let W=fitWidth(c); let ctx=setupCanvas(c,W,H);
+  const mxEl=document.getElementById('fadMx'), myEl=document.getElementById('fadMy'), sEl=document.getElementById('fadS'), rEl=document.getElementById('fadR');
+  const mxV=document.getElementById('fadMxV'), myV=document.getElementById('fadMyV'), sV=document.getElementById('fadSV'), rV=document.getElementById('fadRV');
+  const matchBtn=document.getElementById('fadMatch');
+  const N=150;
+  function randn(n){ const a=new Float32Array(n); for(let i=0;i<n;i++){ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); a[i]=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); } return a; }
+  const rzx=randn(N), rzy=randn(N), gzx=randn(N), gzy=randn(N);
+  // fixed REAL cloud parameters
+  const REAL={mean:[-0.5,0.55], sx:1.15, sy:0.6, th:25};
+  function cloud(mean,sx,sy,thDeg,zx,zy){ const th=thDeg*Math.PI/180, ct=Math.cos(th), st=Math.sin(th); const pts=new Array(N); for(let i=0;i<N;i++){ const ex=sx*zx[i], ey=sy*zy[i]; pts[i]=[mean[0]+ct*ex-st*ey, mean[1]+st*ex+ct*ey]; } return pts; }
+  function meancov(pts){ let mx=0,my=0; for(const p of pts){ mx+=p[0]; my+=p[1]; } mx/=pts.length; my/=pts.length; let a=0,b=0,cc=0; for(const p of pts){ const dx=p[0]-mx, dy=p[1]-my; a+=dx*dx; b+=dx*dy; cc+=dy*dy; } const nn=pts.length; return {mean:[mx,my], cov:[a/nn,b/nn,cc/nn]}; }
+  function fad(R,G){ const dmx=R.mean[0]-G.mean[0], dmy=R.mean[1]-G.mean[1]; const [a,b,cc]=R.cov, [d,e,f]=G.cov;
+    const trProd=a*d+2*b*e+cc*f; const detR=a*cc-b*b, detG=d*f-e*e;
+    const cross=2*Math.sqrt(Math.max(0, trProd+2*Math.sqrt(Math.max(0,detR*detG))));
+    const covTerm=Math.max(0,(a+cc)+(d+f)-cross); const meanTerm=dmx*dmx+dmy*dmy;
+    return {meanTerm,covTerm,total:meanTerm+covTerm}; }
+  const realPts=cloud(REAL.mean,REAL.sx,REAL.sy,REAL.th,rzx,rzy);
+  const realMC=meancov(realPts);
+  let genPts=[], genMC=null, score=null;
+  function genParams(){ const spread=+sEl.value; return {mean:[+mxEl.value,+myEl.value], sx:spread*0.5, sy:spread*0.26, th:+rEl.value}; }
+  function recompute(){ const gp=genParams(); genPts=cloud(gp.mean,gp.sx,gp.sy,gp.th,gzx,gzy); genMC=meancov(genPts); score=fad(realMC,genMC);
+    mxV.textContent=(+mxEl.value).toFixed(2); myV.textContent=(+myEl.value).toFixed(2); sV.textContent=(+sEl.value).toFixed(2); rV.textContent=rEl.value; }
+  function ellipseParams(cov){ const [a,b,cc]=cov; const tr=(a+cc)/2, dd=Math.sqrt(Math.max(0,((a-cc)/2)*((a-cc)/2)+b*b)); const l1=tr+dd, l2=Math.max(0,tr-dd); const ang=0.5*Math.atan2(2*b, a-cc); return {rx:Math.sqrt(Math.max(0,l1)), ry:Math.sqrt(l2), ang}; }
+  function draw(){
+    ctx.fillStyle='#12141c'; ctx.fillRect(0,0,W,H);
+    const k=Math.min(W/9.2, 40), cx=W*0.40, cy=H*0.5;
+    const MX=v=>cx+v*k, MY=v=>cy-v*k;
+    // grid
+    ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=1;
+    for(let gx=-4;gx<=4;gx++){ ctx.beginPath(); ctx.moveTo(MX(gx),8); ctx.lineTo(MX(gx),H-8); ctx.stroke(); }
+    for(let gy=-3;gy<=3;gy++){ ctx.beginPath(); ctx.moveTo(MX(-4),MY(gy)); ctx.lineTo(MX(4),MY(gy)); ctx.stroke(); }
+    ctx.fillStyle='#8a8d9a'; ctx.font="10px 'Lucida Console',monospace"; ctx.textAlign='left';
+    ctx.fillText('EMBEDDING SPACE (2-D toy)', 12, 14);
+    // clouds
+    for(const p of realPts){ ctx.fillStyle='rgba(86,208,208,0.55)'; ctx.beginPath(); ctx.arc(MX(p[0]),MY(p[1]),2.2,0,7); ctx.fill(); }
+    for(const p of genPts){ ctx.fillStyle='rgba(232,90,122,0.5)'; ctx.beginPath(); ctx.arc(MX(p[0]),MY(p[1]),2.2,0,7); ctx.fill(); }
+    // ellipses + means
+    function drawEll(mc,col){ const e=ellipseParams(mc.cov); ctx.strokeStyle=col; ctx.lineWidth=1.6; ctx.beginPath(); ctx.ellipse(MX(mc.mean[0]),MY(mc.mean[1]), Math.max(1,e.rx*k), Math.max(1,e.ry*k), -e.ang, 0, 7); ctx.stroke();
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(MX(mc.mean[0]),MY(mc.mean[1]),3.5,0,7); ctx.fill(); }
+    drawEll(realMC,'#56d0d0'); drawEll(genMC,'#e85a7a');
+    // mean-distance line
+    ctx.strokeStyle='rgba(232,164,74,0.7)'; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(MX(realMC.mean[0]),MY(realMC.mean[1])); ctx.lineTo(MX(genMC.mean[0]),MY(genMC.mean[1])); ctx.stroke(); ctx.setLineDash([]);
+    // readout panel (right)
+    const px=W-190; if(px>MX(4)+6){
+      ctx.textAlign='left';
+      ctx.fillStyle='#56d0d0'; ctx.fillText('■ real', px, 24);
+      ctx.fillStyle='#e85a7a'; ctx.fillText('■ generated', px, 40);
+      ctx.fillStyle='#d4d6e0'; ctx.font="12px 'Lucida Console',monospace";
+      ctx.fillText('FAD = '+score.total.toFixed(3), px, 74);
+      ctx.font="10px 'Lucida Console',monospace"; ctx.fillStyle='#8a8d9a';
+      ctx.fillText('mean term  '+score.meanTerm.toFixed(3), px, 94);
+      ctx.fillText('cov  term  '+score.covTerm.toFixed(3), px, 108);
+      // bar
+      const bw=150, frac=Math.min(1,score.total/16);
+      ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.strokeRect(px, 120, bw, 9);
+      ctx.fillStyle= score.total<0.15?'#5ce89a':'#e85a7a'; ctx.fillRect(px, 120, bw*frac, 9);
+      ctx.fillStyle= score.total<0.15?'#5ce89a':'#8a8d9a'; ctx.fillText(score.total<0.15?'distributions match ✓':'lower is better', px, 144);
+    }
+  }
+  function update(){ recompute(); draw();
+    cap.textContent = score.total<0.15 ? 'FAD ≈ 0 — the generated distribution matches the real one.' : 'FAD = '+score.total.toFixed(3)+'  (mean '+score.meanTerm.toFixed(2)+' + cov '+score.covTerm.toFixed(2)+'). Move the generated cloud onto the real one.'; }
+  [mxEl,myEl,sEl,rEl].forEach(el=>el.addEventListener('input',update));
+  matchBtn.addEventListener('click',()=>{ mxEl.value=REAL.mean[0]; myEl.value=REAL.mean[1]; sEl.value=(REAL.sx/0.5).toFixed(2); rEl.value=REAL.th; update(); });
+  window.addEventListener('resize',()=>{ W=fitWidth(c); ctx=setupCanvas(c,W,H); draw(); });
+  update();
+})();
+
+// ── DEMO 3: capability / roadmap timeline ─────────────────────
+(function roadmap(){
+  const c=document.getElementById('roadViz'); if(!c) return;
+  const info=document.getElementById('roadInfo'); const cap=document.getElementById('roadCap'); const H=300;
+  let W=fitWidth(c); let ctx=setupCanvas(c,W,H);
+  const BASE='https://brendanjameslynskey.github.io/';
+  const HUB=BASE+'Neural_Sound_Synthesis/';
+  const PARTS=[
+    {n:1,  year:2016, title:'Foundations & the Landscape', slug:'Neural_Sound_Synthesis_01_Foundations_and_Landscape', threads:['eval','control'], blurb:'The map itself — four domains, five families, the metrics. Everything else is a point on it.'},
+    {n:2,  year:2016, title:'Autoregressive Waveform', slug:'Neural_Sound_Synthesis_02_Autoregressive_Waveform', threads:['realtime'], blurb:'WaveNet: model the waveform sample-by-sample. Peak fidelity, but 16k sequential passes/second — the original real-time problem.'},
+    {n:3,  year:2018, title:'Neural Vocoders (GAN)', slug:'Neural_Sound_Synthesis_03_Neural_Vocoders_GAN', threads:['realtime','control'], blurb:'MelGAN / HiFi-GAN: invert a spectrogram to a waveform in one fast pass — the real-time last mile of most pipelines.'},
+    {n:4,  year:2018, title:'End-to-End TTS', slug:'Neural_Sound_Synthesis_04_End_to_End_TTS', threads:['control','longform'], blurb:'Tacotron / FastSpeech / VITS: text → mel → wave, and then the whole stack fused end-to-end.'},
+    {n:5,  year:2019, title:'Neural Singing Voice', slug:'Neural_Sound_Synthesis_05_Neural_Singing_Voice', threads:['control','longform'], blurb:'Score- and F0-conditioned singing synthesis — expressive control meets diffusion refinement.'},
+    {n:6,  year:2020, title:'Differentiable DSP', slug:'Neural_Sound_Synthesis_06_Differentiable_DSP', threads:['control','realtime'], blurb:'DDSP: neural control of a classical synth. The cleanest, most interpretable handles in the series — and real-time.'},
+    {n:7,  year:2019, title:'GAN Instrument Synthesis', slug:'Neural_Sound_Synthesis_07_GAN_Instrument_Synthesis', threads:['control','eval'], blurb:'GANSynth: adversarial instrument timbre with attribute-conditioned, one-pass generation.'},
+    {n:8,  year:2020, title:'Diffusion & Flow', slug:'Neural_Sound_Synthesis_08_Diffusion_and_Flow', threads:['ondevice','eval'], blurb:'DiffWave / WaveGrad and flows: the quality engine — now being distilled toward few-step, on-device inference.'},
+    {n:9,  year:2021, title:'Neural Audio Codecs', slug:'Neural_Sound_Synthesis_09_Neural_Audio_Codecs', threads:['ondevice','realtime'], blurb:'SoundStream / EnCodec: quantize audio into discrete tokens — the streaming tokeniser that made audio LMs possible.'},
+    {n:10, year:2022, title:'LM Music Generation', slug:'Neural_Sound_Synthesis_10_LM_Music_Generation', threads:['longform','control'], blurb:'AudioLM / MusicGen: a transformer over codec tokens. Long-form structure and text control — the open frontier of form.'},
+    {n:11, year:2023, title:'Latent Diffusion & Text-to-Audio', slug:'Neural_Sound_Synthesis_11_Latent_Diffusion_Text_to_Audio', threads:['control','longform','eval'], blurb:'Stable Audio / AudioLDM: diffusion inside a VAE latent, steered by text. Quality + prompt control.'},
+    {n:12, year:2024, title:'Real-Time, Control & Frontiers', slug:null, threads:['realtime','watermark','ondevice','eval'], blurb:'You are here. RAVE-style streaming, controllability, evaluation, watermarking and on-device efficiency — the road ahead.'}
+  ];
+  const LENS={
+    all:'All twelve parts. Pick a lens to trace one open problem through the series.',
+    realtime:'REAL-TIME, HIGH-FIDELITY — streaming, causal models fast enough to play live on a CPU.',
+    control:'CONTROLLABILITY — intuitive, disentangled handles a performer can steer and repeat.',
+    longform:'LONG-FORM STRUCTURE — coherent minutes with global form, not just local texture.',
+    eval:'EVALUATION — distribution metrics (FAD/KAD), CLAP and listening tests; all gameable.',
+    watermark:'WATERMARKING & ATTRIBUTION — robust marks (AudioSeal) and provenance (C2PA).',
+    ondevice:'ON-DEVICE & EFFICIENCY — distillation, consistency models and quantization.'
+  };
+  let sel=11, lens='all', pos=[];
+  function href(p){ return p.slug? BASE+p.slug+'/' : HUB; }
+  function layout(){ pos=PARTS.map((p,i)=>{ const x=44+(i/(PARTS.length-1))*(W-88); const y=H*0.44+Math.sin(i*0.85+0.6)*46; return [x,y]; }); }
+  function active(p){ return lens==='all'||p.threads.indexOf(lens)>=0; }
+  function draw(){
+    ctx.fillStyle='#12141c'; ctx.fillRect(0,0,W,H);
+    // spine
+    ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=1.5; ctx.beginPath();
+    for(let i=0;i<pos.length;i++){ if(i===0)ctx.moveTo(pos[i][0],pos[i][1]); else ctx.lineTo(pos[i][0],pos[i][1]); } ctx.stroke();
+    ctx.fillStyle='#8a8d9a'; ctx.font="10px 'Lucida Console',monospace"; ctx.textAlign='left';
+    ctx.fillText('2016', 44, H-12); ctx.textAlign='center'; ctx.fillText('now', W*0.72, H-12); ctx.textAlign='right'; ctx.fillText('frontier →', W-44, H-12);
+    ctx.textAlign='center';
+    for(let i=0;i<PARTS.length;i++){
+      const p=PARTS[i], on=active(p), isSel=(i===sel);
+      const x=pos[i][0], y=pos[i][1];
+      // year
+      ctx.fillStyle= on?'rgba(138,141,154,0.9)':'rgba(138,141,154,0.35)'; ctx.font="9px 'Lucida Console',monospace";
+      ctx.fillText(p.year, x, y-16);
+      // node
+      const r= isSel?11:(on?7:4.5);
+      if(isSel){ ctx.strokeStyle=TEAL(); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r+4,0,7); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(x,y,r,0,7);
+      ctx.fillStyle= on? (isSel?TEAL():'rgba(86,208,208,0.8)') : 'rgba(120,124,140,0.4)'; ctx.fill();
+      // number
+      ctx.fillStyle= on?'#0a0b0f':'rgba(200,200,210,0.5)'; ctx.font="bold 10px 'Lucida Console',monospace";
+      ctx.fillText(p.n, x, y+3.5);
+    }
+    // lens caption
+    ctx.textAlign='left'; ctx.fillStyle='#8a8d9a'; ctx.font="10px 'Lucida Console',monospace";
+    ctx.fillText(LENS[lens], 44, 20);
+  }
+  function panel(){
+    const p=PARTS[sel];
+    info.innerHTML='<strong>Part '+p.n+' · '+p.title+'</strong> ('+p.year+') — '+p.blurb+
+      ' <a href="'+href(p)+'" target="_blank" rel="noopener">'+(p.slug?'Open Part '+p.n+' →':'Series hub →')+'</a>';
+    cap.textContent='Part '+p.n+' selected · lens: '+lens+'. Click a node or step with ◀ ▶.';
+  }
+  function select(i){ sel=(i+PARTS.length)%PARTS.length; draw(); panel(); }
+  document.getElementById('roadLens').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; lens=b.dataset.l; [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); draw(); panel(); });
+  document.getElementById('roadPrev').addEventListener('click',()=>select(sel-1));
+  document.getElementById('roadNext').addEventListener('click',()=>select(sel+1));
+  c.addEventListener('click',e=>{ const r=c.getBoundingClientRect(); const mx=(e.clientX-r.left), my=(e.clientY-r.top); let bd=1e9,bi=-1; for(let i=0;i<pos.length;i++){ const d=Math.hypot(mx-pos[i][0],my-pos[i][1]); if(d<bd){ bd=d; bi=i; } } if(bi>=0&&bd<26) select(bi); });
+  window.addEventListener('resize',()=>{ W=fitWidth(c); ctx=setupCanvas(c,W,H); layout(); draw(); });
+  layout(); draw(); panel();
+})();
+
+// ── hero animation: waveform morphing into spectrogram bars ───
+(function hero(){
+  const c=document.getElementById('heroCanvas'); if(!c) return;
+  const W=()=>Math.max(320,document.documentElement.clientWidth);
+  const H=()=>Math.max(400,Math.min(window.innerHeight,900));
+  let ctx=setupCanvas(c,W(),H());
+  const N=200; let ph=0; let last=performance.now();
+  function frame(now){
+    const w=W(),h=H(); if(c.width!==Math.round(w*DPR)||c.height!==Math.round(h*DPR)) ctx=setupCanvas(c,w,h);
+    const dt=Math.min(0.05,(now-last)/1000); last=now; ph+=dt*0.6;
+    ctx.fillStyle='rgba(10,11,15,0.22)'; ctx.fillRect(0,0,w,h);
+    const morph=0.5+0.5*Math.sin(ph*0.5); // 0 = waveform, 1 = bars
+    ctx.strokeStyle='rgba(74,199,232,0.75)'; ctx.lineWidth=1.6;
+    for(let i=0;i<N;i++){
+      const x=i/(N-1)*w;
+      const tt=i*0.12+ph*3;
+      const wav=Math.sin(tt)+0.5*Math.sin(tt*2.01)+0.3*Math.sin(tt*3.03);
+      const env=0.4+0.6*Math.abs(Math.sin(i*0.05+ph));
+      const barTop=h*0.5 - env*h*0.30*(0.5+0.5*Math.sin(i*0.7+ph*2));
+      const wy=h*0.5 - wav*h*0.09;
+      if(morph<0.5){ // waveform line
+        if(i===0){ctx.beginPath(); ctx.moveTo(x,wy);} else ctx.lineTo(x,wy);
+      }
+    }
+    if(morph<0.5) ctx.stroke();
+    if(morph>=0.5){ // spectrogram-ish bars
+      for(let i=0;i<N;i++){ const x=i/(N-1)*w; const env=Math.abs(Math.sin(i*0.09+ph*1.3))*Math.abs(Math.sin(i*0.3+ph)); const hh=env*h*0.34*(morph); ctx.fillStyle=`rgba(${60+env*120|0},${120+env*100|0},${200},${0.15+env*0.5})`; ctx.fillRect(x-1, h*0.5-hh, 3, hh*2); }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  window.addEventListener('resize',()=>{ ctx=setupCanvas(c,W(),H()); });
+})();
+
+// ── scroll-spy ────────────────────────────────────────────────
+(function toc(){
+  const links=document.querySelectorAll('nav#toc a');
+  const secs=Array.from(links).map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function onScroll(){ const y=window.scrollY+120; let k=0; for(let i=0;i<secs.length;i++){ if(secs[i].offsetTop<=y) k=i; } links.forEach(a=>a.classList.remove('active')); if(links[k]) links[k].classList.add('active'); }
+  window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+})();
+})();
+</script>
+</body>
+</html>
